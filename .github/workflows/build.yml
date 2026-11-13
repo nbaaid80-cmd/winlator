@@ -1,0 +1,56 @@
+name: Build Winlator Y9s Mali Edition
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: تحميل المستودع
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: إعداد بيئة Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: إعداد NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r24
+          add-to-path: true
+
+      - name: تطبيق تعديلات Huawei Y9s و Mali تلقائياً
+        run: |
+          cd app
+          # 1. ضبط دقة الشاشة الافتراضية على 800x600 ومحرك WineD3D
+          sed -i 's/public static final String DEFAULT_SCREEN_SIZE = .*/public static final String DEFAULT_SCREEN_SIZE = "800x600";/' app/src/main/java/com/winlator/container/Container.java
+          sed -i 's/public static final String DEFAULT_DXWRAPPER = .*/public static final String DEFAULT_DXWRAPPER = DXWrappers.WINED3D;/' app/src/main/java/com/winlator/container/Container.java
+          sed -i 's/public static final String DEFAULT_ENV_VARS = .*/public static final String DEFAULT_ENV_VARS = "VIRGL_NO_READBACK=true MESA_GL_VERSION_OVERRIDE=3.1COMPAT MESA_SHADER_CACHE_DISABLE=false MESA_SHADER_CACHE_MAX_SIZE=256MB mesa_glthread=true WINEESYNC=1";/' app/src/main/java/com/winlator/container/Container.java
+          
+          # 2. تفعيل VirGL تلقائياً لمعالج Kirin/Mali لمنع الشاشة السوداء
+          sed -i 's/GraphicsDrivers.DEFAULT_OPENGL_DRIVER/GraphicsDrivers.VIRGL/g' app/src/main/java/com/winlator/container/GraphicsDrivers.java
+          
+          # 3. تغيير اسم التطبيق
+          sed -i 's/<string name="app_name">Winlator<\/string>/<string name="app_name">Winlator Lite (Y9s Edition)<\/string>/' app/src/main/res/values/strings.xml
+
+      - name: بناء الـ APK
+        run: |
+          cd app
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: رفع ملف التطبيق الجاهز
+        uses: actions/upload-artifact@v4
+        with:
+          name: Winlator-Huawei-Y9s
+          path: app/app/build/outputs/apk/debug/*.apk
+          retention-days: 14
